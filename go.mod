@@ -1,4 +1,4 @@
-module gitlab.com/iris3343227/monolib
+module github.com/Astemirdum/monolib
 
 go 1.22.2
 
