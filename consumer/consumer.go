@@ -35,6 +35,7 @@ func initConf() *sarama.Config {
 	//conf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
 
 	ssl := false
+
 	if ssl {
 		certs := x509.NewCertPool()
 		pemPath := "/usr/local/share/ca-certificates/Yandex/YandexInternalRootCA.crt"
