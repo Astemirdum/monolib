@@ -39,8 +39,10 @@ func newConfig() (*sarama.Config, error) {
 
 	if ssl, _ := strconv.ParseBool(os.Getenv("KAFKA_ENABLE_SSL")); ssl {
 		conf.Net.SASL.Enable = true
-		conf.Net.SASL.Password = os.Getenv("KAFKA_USER")
-		conf.Net.SASL.User = os.Getenv("KAFKA_PASSWORD")
+
+		conf.Net.SASL.User = os.Getenv("KAFKA_USER")
+		conf.Net.SASL.Password = os.Getenv("KAFKA_PASSWORD")
+
 		conf.Net.SASL.Handshake = true
 		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
 		conf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
