@@ -5,20 +5,30 @@ import (
 	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"github.com/IBM/sarama"
 	"github.com/xdg/scram"
 	"hash"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 )
 
 func NewSyncProducer(addrs string) (sarama.SyncProducer, error) {
-	return sarama.NewSyncProducer(strings.Split(addrs, ","), getConfig())
+	conf, err := newConfig()
+	if err != nil {
+		return nil, err
+	}
+	return sarama.NewSyncProducer(strings.Split(addrs, ","), conf)
 }
 
 func NewASyncProducer(addrs string) (sarama.AsyncProducer, error) {
-	p, err := sarama.NewAsyncProducer(strings.Split(addrs, ","), getConfig())
+	conf, err := newConfig()
+	if err != nil {
+		return nil, err
+	}
+	p, err := sarama.NewAsyncProducer(strings.Split(addrs, ","), conf)
 	if err != nil {
 		return nil, err
 	}
@@ -36,12 +46,11 @@ func NewASyncProducer(addrs string) (sarama.AsyncProducer, error) {
 	return p, nil
 }
 
-func getConfig() *sarama.Config {
+func newConfig() (*sarama.Config, error) {
 	conf := sarama.NewConfig()
 	conf.Producer.Return.Successes = true
 
 	//conf.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
-
 	//conf.Producer.Flush.Bytes = 10
 	//conf.Producer.RequiredAcks = sarama.NoResponse
 	//conf.Producer.Flush.Messages = 0
@@ -51,20 +60,19 @@ func getConfig() *sarama.Config {
 	//conf.Producer.Flush.Messages = 1
 	//conf.Producer.Retry.Max = 0
 
-	//conf.Net.SASL.Handshake = true
-	//conf.Net.SASL.Password = "2ckP-XMvsZl6je"
-	//conf.Net.SASL.User = "asttest"
-	//conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-	//conf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
-	//conf.Net.SASL.Enable = true
+	if ssl, _ := strconv.ParseBool(os.Getenv("KAFKA_ENABLE_SSL")); ssl {
+		conf.Net.SASL.Handshake = true
+		conf.Net.SASL.Password = os.Getenv("KAFKA_USER")
+		conf.Net.SASL.User = os.Getenv("KAFKA_PASSWORD")
+		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
+		conf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
+		conf.Net.SASL.Enable = true
 
-	ssl := false
-	if ssl {
 		certs := x509.NewCertPool()
-		pemPath := "/usr/local/share/ca-certificates/Yandex/YandexInternalRootCA.crt"
+		pemPath := os.Getenv("KAFKA_CA") // "/usr/local/share/ca-certificates/Yandex/YandexInternalRootCA.crt"
 		pemData, err := os.ReadFile(pemPath)
 		if err != nil {
-			panic("Couldn't load cert: " + err.Error())
+			return nil, fmt.Errorf("couldn't load cert: %w", err)
 		}
 		certs.AppendCertsFromPEM(pemData)
 		conf.Net.TLS.Enable = true
@@ -74,7 +82,7 @@ func getConfig() *sarama.Config {
 		}
 	}
 
-	return conf
+	return conf, nil
 }
 
 var SHA256 scram.HashGeneratorFcn = func() hash.Hash { return sha256.New() }

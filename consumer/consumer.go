@@ -10,39 +10,46 @@ import (
 	"github.com/xdg/scram"
 	"hash"
 	"os"
+	"strconv"
 	"strings"
 )
 
 func NewConsumerGroup(addr, consumerGroup string) (sarama.ConsumerGroup, error) {
-	return sarama.NewConsumerGroup(strings.Split(addr, ","), consumerGroup, initConf())
+	conf, err := newConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return sarama.NewConsumerGroup(strings.Split(addr, ","), consumerGroup, conf)
 }
 
 func NewConsumer(addr string) (sarama.Consumer, error) {
-	return sarama.NewConsumer(strings.Split(addr, ","), initConf())
+	conf, err := newConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return sarama.NewConsumer(strings.Split(addr, ","), conf)
 }
 
-func initConf() *sarama.Config {
+func newConfig() (*sarama.Config, error) {
 	conf := sarama.NewConfig()
 	conf.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRoundRobin()}
 	conf.Consumer.Return.Errors = true
-	conf.Metadata.Full = true
 
-	//conf.Net.SASL.Enable = true
-	//conf.Net.SASL.Password = "2ckP-XMvsZl6je"
-	//conf.Net.SASL.User = "asttest"
-	//conf.Net.SASL.Handshake = true
-	//conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
-	//conf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
+	if ssl, _ := strconv.ParseBool(os.Getenv("KAFKA_ENABLE_SSL")); ssl {
+		conf.Net.SASL.Enable = true
+		conf.Net.SASL.Password = os.Getenv("KAFKA_USER")
+		conf.Net.SASL.User = os.Getenv("KAFKA_PASSWORD")
+		conf.Net.SASL.Handshake = true
+		conf.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient { return &XDGSCRAMClient{HashGeneratorFcn: SHA512} }
+		conf.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
 
-	ssl := false
-
-	if ssl {
 		certs := x509.NewCertPool()
-		pemPath := "/usr/local/share/ca-certificates/Yandex/YandexInternalRootCA.crt"
+		pemPath := os.Getenv("KAFKA_CA") // "/usr/local/share/ca-certificates/Yandex/YandexInternalRootCA.crt"
 		pemData, err := os.ReadFile(pemPath)
 		if err != nil {
-			fmt.Println("Couldn't load cert: ", err.Error())
-			panic(err)
+			return nil, fmt.Errorf("couldn't load cert: %w", err)
 		}
 		certs.AppendCertsFromPEM(pemData)
 
@@ -53,7 +60,7 @@ func initConf() *sarama.Config {
 		}
 	}
 
-	return conf
+	return conf, nil
 }
 
 var SHA256 scram.HashGeneratorFcn = func() hash.Hash { return sha256.New() }
